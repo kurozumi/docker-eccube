@@ -37,6 +37,8 @@ services:
       - ./app/DoctrineMigrations:/var/www/html/app/DoctrineMigrations:ro
       # framework 級設定（monolog 等）はステージングへ置き、entrypoint が本体へマージ
       - ./app/config/eccube/packages:/opt/eccube-config/packages:ro
+      # ユニットテスト設定（app/Customize/Tests を対象。本体の phpunit.xml.dist は残す）
+      - ./phpunit.xml:/var/www/html/phpunit.xml:ro
     depends_on:
       db:
         condition: service_healthy

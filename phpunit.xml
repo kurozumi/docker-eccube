@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  自分のコード（app/Customize/）向けのユニットテスト設定。
+  EC-CUBE 本体のフルスイート（DB が要る・重い）は image の phpunit.xml.dist に残しており、
+  必要なときだけ `vendor/bin/phpunit -c phpunit.xml.dist` で実行する。
+
+  ここでは app/Customize/Tests/ だけを対象にする。純粋なユニットテスト
+  （PHPUnit\Framework\TestCase 継承）は DB 不要で走る。DB を使う統合テスト
+  （Eccube\Tests\EccubeTestCase 等）を書くときは、テスト用 DB と DAMA リスナーを
+  足す（README 参照）。
+-->
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+         backupGlobals="false"
+         colors="true"
+         bootstrap="tests/bootstrap.php"
+         convertDeprecationsToExceptions="false"
+>
+    <php>
+        <ini name="display_errors" value="1" />
+        <ini name="error_reporting" value="-1" />
+        <server name="KERNEL_CLASS" value="Eccube\Kernel" />
+        <server name="SYMFONY_DEPRECATIONS_HELPER" value="weak" />
+        <server name="APP_ENV" value="test" force="true" />
+        <server name="SHELL_VERBOSITY" value="-1" />
+    </php>
+
+    <testsuites>
+        <testsuite name="Customize Test Suite">
+            <directory>app/Customize/Tests</directory>
+        </testsuite>
+    </testsuites>
+
+    <coverage>
+        <include>
+            <directory suffix=".php">app/Customize</directory>
+        </include>
+        <exclude>
+            <directory suffix=".php">app/Customize/Tests</directory>
+            <directory suffix=".php">app/Customize/Resource</directory>
+        </exclude>
+    </coverage>
+</phpunit>

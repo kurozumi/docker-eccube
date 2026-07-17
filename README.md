@@ -90,6 +90,38 @@ bin/publish.sh   # docker compose -f compose.yaml -f compose.prod.yaml up -d --b
 - **caddy**: `.env` に `SITE_DOMAIN` を設定し、A レコードをこのサーバーへ向ける。
 - **背後配置**: `COMPOSE_PROFILES` を空にすると nginx は `127.0.0.1:8080` のみで待ち受ける。
 
+## ユニットテスト
+
+自分のコードのテストは **`app/Customize/Tests/`** に置く（`Customize\` 名前空間で
+autoload されるので、対象クラスをそのまま `use` できる。本体は汚さない）。
+
+```bash
+bin/test.sh                       # 全テスト（app/Customize/Tests/）
+bin/test.sh --filter testAddition # 絞り込み
+bin/test.sh --testdox             # 読みやすい出力
+```
+
+- 対象は `phpunit.xml`（プロジェクトルート）で `app/Customize/Tests` に限定している。
+  純粋なユニットテスト（`PHPUnit\Framework\TestCase` 継承）は **DB 不要**で走る。
+- EC-CUBE 本体のフルスイート（重い・DB 必須）は image の `phpunit.xml.dist` に残してある。
+  必要なときだけ `docker compose exec ec-cube runuser -u www-data -- vendor/bin/phpunit -c phpunit.xml.dist`。
+
+### DB を使う統合テストを書くとき
+
+`Eccube\Tests\EccubeTestCase` などを継承する統合テストは、テスト用 DB とスキーマが要る。
+
+```bash
+# テスト用 DB を作成してスキーマを構築（例）
+docker compose exec ec-cube runuser -u www-data -- \
+  php bin/console doctrine:database:create --env=test --if-not-exists
+docker compose exec ec-cube runuser -u www-data -- \
+  php bin/console doctrine:schema:create --env=test
+```
+
+さらに `phpunit.xml` に DAMA\DoctrineTestBundle リスナー（各テストをトランザクションで
+包んでロールバックする）を足すと、テストがデータを汚さない。設定例は本体の
+`phpunit.xml.dist` を参照。
+
 ## framework 級設定（monolog 等）の置き場所について
 
 EC-CUBE 4.3 の `src/Eccube/Kernel.php::configureContainer()` は、
