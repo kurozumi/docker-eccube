@@ -1,19 +1,28 @@
 # 開発用オーバーレイ（`docker compose up -d` で自動読み込みされる）。
 # 自分のコード（Customize / template / DoctrineMigrations）を rw で live 編集できるようにし、
-# phpMyAdmin と Mailpit UI を公開する。
+# 開発専用ツール（Mailpit・phpMyAdmin）を起動する。
 #
 # APP_ENV はここで上書きしない。既定は .env の prod。デバッグ時だけ .env を dev に。
 services:
   ec-cube:
+    environment:
+      # 開発は Mailpit にメールを送って UI で確認する（外部送信しない）。
+      # .env で MAILER_DSN を明示していればそちらが優先される。
+      MAILER_DSN: ${MAILER_DSN:-smtp://mailpit:1025}
     volumes:
       # base の :ro を rw で上書き（同じ target は override が勝つ）
       - ./app/Customize:/var/www/html/app/Customize
       - ./app/template:/var/www/html/app/template
       - ./app/DoctrineMigrations:/var/www/html/app/DoctrineMigrations
 
+  # 送信メールを外部に出さず受け止め、Web UI で確認する（開発専用）。
   mailpit:
+    image: axllent/mailpit:latest
+    environment:
+      MP_MAX_MESSAGES: 500
     ports:
       - "${MAILPIT_UI_PORT:-8025}:8025"   # メール確認 UI
+    restart: unless-stopped
 
   phpmyadmin:
     image: phpmyadmin:5

@@ -22,9 +22,6 @@ services:
   db:
     restart: always
 
-  mailpit:
-    restart: always
-
   # ── tunnel プロファイル: Cloudflare Tunnel ──
   # サーバーからの outbound だけで公開。80/443 を開けず、オリジン IP も隠れる。
   # TUNNEL_TOKEN は Cloudflare Zero Trust の Tunnel 作成時に発行。公開ホスト名は

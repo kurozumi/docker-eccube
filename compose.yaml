@@ -18,7 +18,9 @@ services:
       # 残っていてもこの derived 値が勝つ。
       DATABASE_URL: "mysql://${DB_USER:-eccube}:${DB_PASSWORD:-eccube_pass}@db:3306/${DB_NAME:-eccube_db}?serverVersion=${DATABASE_SERVER_VERSION:-mariadb-10.6.0}&charset=utf8mb4"
       DATABASE_SERVER_VERSION: ${DATABASE_SERVER_VERSION:-mariadb-10.6.0}
-      MAILER_DSN: ${MAILER_DSN:-smtp://mailpit:1025}
+      # 本番は実メールサービスの DSN を .env で設定する。未設定なら送信は破棄（null）。
+      # 開発は compose.override.yaml が Mailpit 宛てに上書きする。
+      MAILER_DSN: ${MAILER_DSN:-null://null}
       ECCUBE_ADMIN_ROUTE: ${ECCUBE_ADMIN_ROUTE:-admin}
       ECCUBE_LOCALE: ${ECCUBE_LOCALE:-ja}
       # ECCUBE_AUTH_MAGIC はここ（environment）では渡さない。空文字を注入すると
@@ -75,12 +77,8 @@ services:
       retries: 20
     restart: unless-stopped
 
-  # 送信メールは外部に出さず、すべてここで受けて Web UI で確認する。
-  mailpit:
-    image: axllent/mailpit:latest
-    environment:
-      MP_MAX_MESSAGES: 500
-    restart: unless-stopped
+  # Mailpit は開発専用（送信メールの確認用）。dev だけで起動するため
+  # compose.override.yaml に定義している。本番では使わない。
 
 volumes:
   eccube_app:
