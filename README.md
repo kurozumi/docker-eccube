@@ -95,6 +95,11 @@ bin/publish.sh   # docker compose -f compose.yaml -f compose.prod.yaml up -d --b
 自分のコードのテストは **`app/Customize/Tests/`** に置く（`Customize\` 名前空間で
 autoload されるので、対象クラスをそのまま `use` できる。本体は汚さない）。
 
+> ルート直下の `tests/` にしない理由: autoload には `composer.json` の追記が要るが、
+> それはイメージにベイクされるため **バージョン切替（再ビルド）のたびに消える**。
+> `Customize\` は本体 composer.json がどのバージョンでも保証するので、
+> `app/Customize/Tests/` なら設定ゼロで切替後も壊れない。
+
 ```bash
 bin/test.sh                       # 全テスト（app/Customize/Tests/）
 bin/test.sh --filter testAddition # 絞り込み
