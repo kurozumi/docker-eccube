@@ -23,6 +23,12 @@ services:
       MAILER_DSN: ${MAILER_DSN:-null://null}
       ECCUBE_ADMIN_ROUTE: ${ECCUBE_ADMIN_ROUTE:-admin}
       ECCUBE_LOCALE: ${ECCUBE_LOCALE:-ja}
+      # LB/プロキシ背後で X-Forwarded-* を信頼する範囲（既定は空＝信頼しない）。
+      # HTTPS 終端 LB を使う複数ホスト構成では LB の IP/サブネットを設定する。
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
+      # DB スキーマ操作の可否。単一ホストは 0（実行）。複数ホストで「app ロール」の
+      # ホストは 1 にしてスキーマに触らせない（init ロール 1 台だけ 0 にする）。
+      ECCUBE_SKIP_DB_INIT: ${ECCUBE_SKIP_DB_INIT:-0}
       # ECCUBE_AUTH_MAGIC はここ（environment）では渡さない。空文字を注入すると
       # Symfony Dotenv が「設定済み」とみなし、secret が空で bin/console が落ちるため。
       # 値は .env（env_file）で渡す。bin/init.sh が未設定なら自動生成する。

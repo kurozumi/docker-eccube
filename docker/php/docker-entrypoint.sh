@@ -79,9 +79,15 @@ until php -r 'exit(@mysqli_connect(getenv("DB_HOST"), getenv("DB_USER"), getenv(
     sleep 2
 done
 
-# 3) 初回のみインストール。以降は未適用 migration のみ適用。
+# 3) DB スキーマ操作。
+#    複数ホスト構成では「init ロール 1 台だけ」が install/migrate を行い、
+#    「app ロール（ECCUBE_SKIP_DB_INIT=1）」はスキーマに触らず cache:clear だけ行う
+#    （全 app ホストが一斉に migrate すると競合するため）。単一ホストなら未設定でよい。
 MARKER="$APP_DIR/var/.eccube_installed"
-if [ ! -f "$MARKER" ]; then
+if [ "${ECCUBE_SKIP_DB_INIT:-0}" = "1" ]; then
+    log "app ロール: DB 初期化/マイグレーションをスキップ（cache:clear のみ）"
+    runuser -u www-data -- php bin/console cache:clear --no-interaction || true
+elif [ ! -f "$MARKER" ]; then
     log "eccube:install（初回セットアップ）"
     if runuser -u www-data -- php bin/console eccube:install --no-interaction; then
         runuser -u www-data -- php bin/console doctrine:migrations:migrate --no-interaction --allow-no-migration || true

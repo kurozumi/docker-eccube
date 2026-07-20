@@ -1,0 +1,23 @@
+# LB / リバースプロキシ背後で X-Forwarded-* を信頼する設定（本体は未配線のため補う）。
+#
+# なぜ必要か: HTTPS を LB で終端して app へは HTTP で来る構成だと、これを設定しないと
+#   $request->isSecure() が false のままになり、
+#     - セッション Cookie の secure / SameSite=None が付かない（決済リダイレクトで問題）
+#     - 生成 URL やリダイレクトが http:// になる
+#   といった不具合が起きる。
+#
+# TRUSTED_PROXIES には「直前のプロキシ（LB）の IP / サブネット」だけを入れること。
+# 広く信頼しすぎると X-Forwarded-For 詐称を許すセキュリティリスクになる。
+#   例: TRUSTED_PROXIES=10.0.0.0/8      （プライベート網の LB）
+#       TRUSTED_PROXIES=REMOTE_ADDR     （直前の peer を常に信頼＝単純だが緩い）
+# 既定は空＝どのプロキシも信頼しない（単一ホスト時と同じ挙動）。
+parameters:
+    env(TRUSTED_PROXIES): ''
+
+framework:
+    trusted_proxies: '%env(TRUSTED_PROXIES)%'
+    trusted_headers:
+        - 'x-forwarded-for'
+        - 'x-forwarded-host'
+        - 'x-forwarded-proto'
+        - 'x-forwarded-port'
