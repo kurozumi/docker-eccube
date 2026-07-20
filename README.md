@@ -264,6 +264,36 @@ DB=外部）になっているので、**アプリホストを N 台並べて前
 > セッション Cookie の `secure`/`SameSite=None` が付かず（決済で問題）、生成 URL も http に
 > なる。セッションは Redis 共有なので **スティッキーセッションは不要**。
 
+### デプロイ / 更新（CI とローリング更新）
+
+**イメージは CI が 1 回だけ build** し、各ホストは pull する（全ホスト同一の保証）。
+
+- `.github/workflows/build-image.yml`: main への push（`docker/php/**` 変更時）で
+  `ghcr.io/<owner>/<repo>/ec-cube:latest` と `:<git-sha>` を push。手動実行では
+  `ECCUBE_VERSION` を指定できる。認証は `GITHUB_TOKEN`（追加シークレット不要）。
+- 各アプリホストの `.env` に `ECCUBE_IMAGE=ghcr.io/<owner>/<repo>/ec-cube:<sha>` を設定
+  （`latest` より **sha 固定を推奨**。ロールバック = 前の sha に戻して pull）。
+
+**ローリング更新**（無停止。1 台ずつ）:
+
+```bash
+# ホスト A で（他ホストは稼働継続）
+# 1. LB からホスト A を外す（nginx LB: upstream をコメントアウトして reload /
+#    Cloudflare LB: プールで無効化 / ALB: deregister）
+# 2. 新イメージへ更新
+docker compose -f compose.app.yaml pull ec-cube
+docker compose -f compose.app.yaml up -d --no-build
+# 3. ヘルス確認（healthy になるまで）
+docker compose -f compose.app.yaml ps
+curl -fsS http://localhost:8080/ -o /dev/null && echo OK
+# 4. LB に戻す → 次のホストへ
+```
+
+- マイグレーションを伴う更新は、**先に 1 台（init ロール）で `ECCUBE_SKIP_DB_INIT=0`
+  にして適用**してから残りを更新する（後方互換のあるスキーマ変更にすること）。
+- 単一ホスト（compose.yaml）の場合はこの手順は使えず、`up -d --build` の数十秒の
+  停止を許容するか、メンテナンス画面を挟む。
+
 ### さらに上（Tier 3）
 
 - DB リードレプリカ（Doctrine の read/write 分割）、マネージド DB/Redis（RDS/Aurora・
