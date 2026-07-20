@@ -1,0 +1,25 @@
+# メール送信の非同期化（Symfony Messenger）。
+#
+# なぜ: 同期送信だと注文完了処理が SMTP 応答をブロック待ちし、SMTP 障害＝購入不能に
+# 直結する。キュー経由にすると、注文はメールを待たずに完了し、SMTP 停止中も
+# メッセージは DB に溜まり復旧後に送信される（3 回リトライ→failed キューへ）。
+#
+# transport は Doctrine（既存 DB を使用・追加インフラ不要）。テーブル
+# messenger_messages は初回利用時に自動作成される（auto_setup）。
+# consumer は compose の `worker` サービス（messenger:consume async）。
+#
+# ▸ 同期送信に戻すには、このファイルを削除して worker を止めるだけ。
+framework:
+    messenger:
+        transports:
+            async:
+                dsn: 'doctrine://default'
+                retry_strategy:
+                    max_retries: 3
+                    delay: 5000        # 5s → 15s → 45s
+                    multiplier: 3
+            failed: 'doctrine://default?queue_name=failed'
+        failure_transport: failed
+        routing:
+            # Mailer の送信メッセージをキューへ（これが非同期化の本体）
+            'Symfony\Component\Mailer\Messenger\SendEmailMessage': async

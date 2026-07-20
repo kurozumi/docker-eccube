@@ -274,6 +274,30 @@ DB=外部）になっているので、**アプリホストを N 台並べて前
 > CSRF トークン・カート・ログイン状態を埋め込むため、誤配信の危険がある。有効化する
 > 場合の雛形と注意は `docker/nginx/default.conf` 末尾のコメントを参照。
 
+## メール送信の非同期化（Messenger）
+
+メールはキュー経由で送信される（Symfony Messenger + Doctrine transport）。
+
+- **注文完了などのレスポンスが SMTP 応答を待たない**（同期送信だと外部 SMTP の
+  遅延・障害が購入処理に直結する）。
+- SMTP 停止中もメッセージは DB（`messenger_messages`）に残り、復旧後に送信される
+  （5s→15s→45s で 3 回リトライ → `failed` キューへ）。
+- consumer は `worker` サービス（`messenger:consume async`）。`--time-limit=3600` で
+  定期再起動し、restart ポリシーで常駐。healthcheck（プロセス監視）つき。
+
+運用コマンド:
+
+```bash
+docker compose logs -f worker                    # 送信ログ
+docker compose exec worker runuser -u www-data -- php bin/console messenger:stats
+docker compose exec worker runuser -u www-data -- php bin/console messenger:failed:show
+docker compose exec worker runuser -u www-data -- php bin/console messenger:failed:retry
+```
+
+> 同期送信に戻すには `app/config/eccube/packages/messenger.yaml` を削除して
+> `worker` を止めるだけ。Messenger パッケージはイメージビルド時に追加している
+> （`docker/php/Dockerfile`。本体ソースは非編集・再ビルドで再現）。
+
 ## バックアップ / 復元
 
 DB（受注・会員）とアップロード画像を 1 コマンドでバックアップできる。
