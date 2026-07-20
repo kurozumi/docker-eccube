@@ -87,6 +87,9 @@ if [ ! -f "$MARKER" ]; then
 else
     log "インストール済み。未適用の migration を適用します。"
     runuser -u www-data -- php bin/console doctrine:migrations:migrate --no-interaction --allow-no-migration || true
+    # bind-mount した app/config・app/Customize の変更を prod のコンパイル済み
+    # コンテナへ反映するため、毎起動でキャッシュを作り直す（dev では無害）。
+    runuser -u www-data -- php bin/console cache:clear --no-interaction || true
 fi
 
 exec "$@"

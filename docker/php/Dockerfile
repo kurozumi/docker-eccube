@@ -38,11 +38,14 @@ RUN docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp \
         opcache
 
 # ---- phpredis（セッション/キャッシュの Redis 共有用）----
+# バージョンを 6.0.x に固定する。phpredis 6.1+ は hSet が可変長シグネチャに変わり、
+# EC-CUBE 4.3 同梱の Symfony Cache 6.4 の Redis6Proxy（3固定引数）と衝突するため。
 # pecl のビルドに必要な依存は一時的に入れて、ビルド後に取り除く。
+ARG PHPREDIS_VERSION=6.0.2
 RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends $PHPIZE_DEPS; \
-    pecl install redis; \
+    pecl install "redis-${PHPREDIS_VERSION}"; \
     docker-php-ext-enable redis; \
     apt-get purge -y --auto-remove $PHPIZE_DEPS; \
     rm -rf /var/lib/apt/lists/* /tmp/pear
