@@ -1,0 +1,94 @@
+# アプリ層のみ（ec-cube + nginx）を動かす構成。複数ホストで LB する際、各アプリホストで
+# これを起動する。DB / Redis / セッション Redis / アップロード共有ストレージは「外部の
+# 共有サービス」を指す（このファイルには db/redis を含めない）。
+#
+#   使い方（各アプリホスト）:
+#     docker compose -f compose.app.yaml up -d --build   # or 事前に push した image を pull
+#
+#   前提: .env に外部エンドポイントを設定しておく（.env.example の「複数ホスト」節を参照）:
+#     DB_HOST / DB_USER / DB_PASSWORD / DB_NAME  … 共有 DB
+#     REDIS_URL / SESSION_REDIS_URL              … 共有 Redis（キャッシュ / セッション）
+#     ECCUBE_SKIP_DB_INIT=1                       … app ロール（スキーマに触らない）
+#
+#   スキーマの install / migrate は「init ロールの 1 台」でだけ行う:
+#     ECCUBE_SKIP_DB_INIT=0 で 1 度起動して migrate 済ませてから、app ホストを増やす。
+#
+#   アップロード画像(eccube_upload)は NFS/EFS ドライバで全ホスト共有にすること
+#   （下部 volumes 参照。ローカルボリュームのままだとホストごとに別物になる）。
+name: eccube-app
+
+services:
+  ec-cube:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+      args:
+        ECCUBE_VERSION: ${ECCUBE_VERSION:-~4.3.0}
+        PHP_VERSION: ${PHP_VERSION:-8.2}
+    # 本番は push 済みイメージを使うのが基本（全ホストで同一を保証）:
+    # image: ${ECCUBE_IMAGE:-eccube-ec-cube:latest}
+    env_file: .env
+    environment:
+      APP_ENV: ${APP_ENV:-prod}
+      APP_DEBUG: ${APP_DEBUG:-0}
+      # 外部の共有 DB を指す（DB_HOST は別サーバー / マネージド DB）
+      DATABASE_URL: "mysql://${DB_USER:-eccube}:${DB_PASSWORD:-eccube_pass}@${DB_HOST:-db}:${DB_PORT:-3306}/${DB_NAME:-eccube_db}?serverVersion=${DATABASE_SERVER_VERSION:-mariadb-10.6.0}&charset=utf8mb4"
+      DATABASE_SERVER_VERSION: ${DATABASE_SERVER_VERSION:-mariadb-10.6.0}
+      MAILER_DSN: ${MAILER_DSN:-null://null}
+      ECCUBE_ADMIN_ROUTE: ${ECCUBE_ADMIN_ROUTE:-admin}
+      ECCUBE_LOCALE: ${ECCUBE_LOCALE:-ja}
+      # 前段 LB の IP/サブネットを信頼して X-Forwarded-* を honor（HTTPS 判定に必須）
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
+      # 外部の共有 Redis（キャッシュ / セッション）
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      SESSION_REDIS_URL: ${SESSION_REDIS_URL:-redis://redis-session:6379}
+      # DB 起動待ち用（外部 DB を指す）
+      DB_HOST: ${DB_HOST:-db}
+      DB_USER: ${DB_USER:-eccube}
+      DB_PASSWORD: ${DB_PASSWORD:-eccube_pass}
+      DB_NAME: ${DB_NAME:-eccube_db}
+      # app ロール: スキーマに触らない（init ロールだけ 0 にする）
+      ECCUBE_SKIP_DB_INIT: ${ECCUBE_SKIP_DB_INIT:-1}
+      # php-fpm チューニング
+      PHP_FPM_PM: ${PHP_FPM_PM:-dynamic}
+      PHP_FPM_MAX_CHILDREN: ${PHP_FPM_MAX_CHILDREN:-20}
+      PHP_FPM_START_SERVERS: ${PHP_FPM_START_SERVERS:-4}
+      PHP_FPM_MIN_SPARE: ${PHP_FPM_MIN_SPARE:-2}
+      PHP_FPM_MAX_SPARE: ${PHP_FPM_MAX_SPARE:-6}
+      PHP_FPM_MAX_REQUESTS: ${PHP_FPM_MAX_REQUESTS:-500}
+    volumes:
+      - eccube_app:/var/www/html
+      - ./app/Customize:/var/www/html/app/Customize:ro
+      - ./app/template:/var/www/html/app/template:ro
+      - ./app/DoctrineMigrations:/var/www/html/app/DoctrineMigrations:ro
+      - ./app/Plugin:/var/www/html/app/Plugin:ro
+      - ./html/user_data:/var/www/html/html/user_data:ro
+      - ./app/config/eccube/packages:/opt/eccube-config/packages:ro
+      # アップロード画像は全ホスト共有（下部 volumes を NFS/EFS ドライバに差し替える）
+      - eccube_upload:/var/www/html/html/upload
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:1.27-alpine
+    ports:
+      - "${HTTP_PORT:-8080}:80"
+    volumes:
+      - eccube_app:/var/www/html:ro
+      - ./html/user_data:/var/www/html/html/user_data:ro
+      - eccube_upload:/var/www/html/html/upload:ro
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - ec-cube
+    restart: unless-stopped
+
+volumes:
+  # コードは各ホストのローカル（イメージから展開＝全ホスト同一）
+  eccube_app:
+  # アップロード画像は全ホスト共有。本番は必ず NFS/EFS へ:
+  #   eccube_upload:
+  #     driver: local
+  #     driver_opts:
+  #       type: nfs
+  #       o: "addr=10.0.0.10,rw,nfsvers=4"
+  #       device: ":/export/eccube/upload"
+  eccube_upload:
