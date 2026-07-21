@@ -60,6 +60,25 @@ fi
 # var/ は www-data が書けるように
 chown -R www-data:www-data var 2>/dev/null || true
 
+# 1b) Messenger（メール非同期化）が volume 内 vendor に無ければ一度だけ追加する。
+#     イメージには焼き込み済みだが、既存の eccube_app volume はイメージ内容を
+#     覆い隠すため、旧 volume 環境では初回にここで追加される（要ネットワーク）。
+if [ ! -d vendor/symfony/messenger ]; then
+    log "symfony/messenger を追加インストール（既存 volume への初回のみ）"
+    # --no-plugins: Flex レシピを止める。レシピは phpunit.xml（:ro mount）等を
+    # 書き換えようとして失敗する。設定は自前の messenger.yaml を使うので不要。
+    runuser -u www-data -- composer require --no-interaction --no-scripts --no-plugins \
+        "symfony/messenger:~6.4.0" "symfony/doctrine-messenger:~6.4.0" \
+        || log "警告: messenger の追加に失敗しました"
+fi
+# フェイルセーフ: それでも messenger が無ければ、マージ済みの messenger.yaml を
+# 取り除く（設定だけ残るとコンテナのコンパイルが失敗し全ページ 500 になるため）。
+# この場合メールは従来どおり同期送信で動く。
+if [ ! -d vendor/symfony/messenger ] && [ -f app/config/eccube/packages/messenger.yaml ]; then
+    log "messenger 不在のため messenger.yaml を外します（同期送信で継続）"
+    rm -f app/config/eccube/packages/messenger.yaml
+fi
+
 # アップロード画像は専用ボリューム（初回や NFS 差し替え時は空）。必要な
 # サブディレクトリを用意して www-data 所有にする（無いとアップロードが失敗する）。
 for d in save_image temp_image; do

@@ -23,6 +23,11 @@ services:
       # プラグイン開発・導入は書き込みが要る（plugin:generate / composer install）
       - ./app/Plugin:/var/www/html/app/Plugin
 
+  # worker（メール consumer）も開発では Mailpit へ送る
+  worker:
+    environment:
+      MAILER_DSN: ${MAILER_DSN:-smtp://mailpit:1025}
+
   # 送信メールを外部に出さず受け止め、Web UI で確認する（開発専用）。
   mailpit:
     logging: *default-logging

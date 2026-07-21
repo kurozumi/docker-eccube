@@ -16,6 +16,9 @@ services:
   #   resource: '../../*'
   #   exclude: '../../{Entity,Resource,Tests}'
 
+  # メール疎通確認コマンド（bin/console customize:mail-test <宛先>）
+  Customize\Command\MailTestCommand: ~
+
   # ── セッションを Redis に載せる（Tier 2: 複数ホスト対応の前提）──
   # 本体の SameSiteNoneCompatSessionHandler（決済リダイレクトの SameSite=None 対応）は
   # 内側の SessionHandlerInterface を decorate する設計。その内側を「ファイル」から
