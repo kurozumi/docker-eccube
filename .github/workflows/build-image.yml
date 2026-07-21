@@ -1,0 +1,71 @@
+# EC-CUBE アプリイメージを build して GHCR へ push する。
+#
+# 目的: 複数ホスト運用（compose.app.yaml）で「全ホストが同一イメージ」を保証する。
+# 各ホストでの build をやめ、ここで 1 回 build → 各ホストは pull するだけにする。
+#
+# トリガ:
+#   - main への push のうち、イメージ内容に影響するパスの変更
+#   - 手動実行（workflow_dispatch。EC-CUBE バージョンを指定可能）
+#
+# 生成タグ:
+#   ghcr.io/<owner>/<repo>/ec-cube:latest     … 最新の main
+#   ghcr.io/<owner>/<repo>/ec-cube:<git-sha>  … 固定参照用（ロールバックに使う）
+#
+# 認証は GITHUB_TOKEN（permissions: packages: write）。追加シークレット不要。
+name: build-image
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docker/php/**"
+      - ".github/workflows/build-image.yml"
+  workflow_dispatch:
+    inputs:
+      eccube_version:
+        description: "ECCUBE_VERSION（composer 制約）"
+        default: "~4.3.0"
+        required: false
+      php_version:
+        description: "PHP_VERSION"
+        default: "8.2"
+        required: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}/ec-cube
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/php/Dockerfile
+          push: true
+          # 必要なら linux/arm64 を足す（build 時間は倍近くになる）
+          platforms: linux/amd64
+          build-args: |
+            ECCUBE_VERSION=${{ github.event.inputs.eccube_version || '~4.3.0' }}
+            PHP_VERSION=${{ github.event.inputs.php_version || '8.2' }}
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
